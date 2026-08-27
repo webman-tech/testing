@@ -8,7 +8,7 @@ webman 是常驻内存的进程模型，无法像 laravel 那样在测试进程�
 
 ## 功能特性
 
-- **Server 进程编排**：自动启动、就绪等待、停止与残留清理，整个测试进程共享复用；默认端口 18787（可配置）
+- **Server 进程编排**：自动启动、就绪等待、停止与残留清理，整个测试进程共享复用；监听地址与 webman 应用天然一致（组件与 webman 同一读取方式——config('process.webman.listen')，不配置 host/port）
 - **laravel 同款 API**：`TestCase` 按 Concerns 组合（MakesHttpRequests / InteractsWithAuthentication / InteractsWithConsole / InteractsWithDatabase / InteractsWithServer），方法签名对齐 laravel
 - **laravel 风格 TestResponse**：状态码/header/redirect/cookie/文本/JSON 全套链式断言，`json()` 支持 dot 路径取值
 - **非 HTTP 测试一等公民**：CLI 命令断言、副作用轮询、数据库直连断言
@@ -29,21 +29,25 @@ HTTP 请求仅依赖 PSR 标准接口（psr/http-client + psr/http-message），
 
 ## 快速开始
 
-### 1. 应用侧共享配置（可选，默认 18787）
+### 1. 端口分离（业务端口与测试端口互不影响）
 
-端口由应用侧 `config/testing.php` 决定（测试进程与应用进程读同一文件），未配置时两端默认都是 18787。应用在 `config/process.php` 中使用同一端口：
+组件**不关心也不配置** host/port：以与 webman 相同的方式读取被测应用 `config/process.php` 中 webman 进程的 listen 配置（`config('process.webman.listen')`——测试进程加载应用 vendor/autoload.php 时，webman-framework 的 helpers 已自动加载），天然与应用进程一致。
 
-```php
-// config/testing.php
-return [
-    'port' => 18787,
-];
-```
+「测试用独立端口」是应用侧的处理模式（可选）：给 `config/process.php` 中 listen 的 port 进行 env 化，业务运行时不设置环境变量保持原端口（默认 8787），测试时由 `phpunit.xml` 注入切换：
 
 ```php
 // config/process.php
-'listen' => 'http://0.0.0.0:' . (config('testing.port') ?: 18787),
+'listen' => 'http://0.0.0.0:' . (getenv('APP_PORT') ?: 8787),
 ```
+
+```xml
+<!-- phpunit.xml -->
+<php>
+    <env name="APP_PORT" value="18787"/>
+</php>
+```
+
+链路：phpunit.xml 设置 → 测试进程环境 → server 子进程（继承环境）→ process.php 读取；组件与 webman 进程内读取同一份配置（config('process.webman.listen')），两端读到同一地址。不 env 化也可以：组件读到的就是业务端口，测试直接使用该端口。
 
 ### 2. 写测试（pest 风格）
 

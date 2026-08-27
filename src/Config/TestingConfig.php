@@ -10,16 +10,13 @@ use InvalidArgumentException;
  * Testing 配置（配置传导：显式传参 > 配置文件 > 默认值）
  *
  * - 自动读取被测应用下的配置文件 `config/testing.php`（键名与 fromConfig 一致；
- *   被测应用侧可同时用 webman 的 config('testing') 读取同一文件，保证两进程配置同源）
+ *   被测应用侧可同时用 webman 的 config('testing') 读取同一文件，两进程配置同源）
+ * - 监听地址（host/port）不经本类配置：组件以与 webman 相同的方式（config('process.webman.listen')）
+ *   读取 webman 进程的 listen 配置，天然与应用进程一致（见 Server::baseUrl()）
  * - 本类只做配置传导与必要校验，不做环境变量等旁路配置源
  */
 final class TestingConfig
 {
-    /**
-     * 端口未配置时的默认值（避开 webman 官方默认 8787，防止与常规项目冲突；与被测应用侧约定一致）
-     */
-    private const FALLBACK_PORT = 18787;
-
     /**
      * guzzle 自动发现时的默认构造参数（经 httpClient 配置项覆盖；http_errors 恒为 false 不可覆盖）
      */
@@ -32,8 +29,6 @@ final class TestingConfig
 
     public function __construct(
         public readonly string $appDir,
-        public readonly string $host,
-        public readonly int    $port,
         public readonly string $phpBinary,
         public readonly string $entryFile,
         public readonly array  $serverEnv,
@@ -66,12 +61,12 @@ final class TestingConfig
     public static function fromConfig(array $config): self
     {
         $appDir = $config['appDir'] ?? (string)getcwd();
-        $fileConfig = self::readWebmanConfigFile($appDir);
+        // config('testing') 依赖 webman 配置数据已加载，先确保（未引导时自动加载应用配置目录）
+        self::ensureConfigLoaded($appDir);
+        $fileConfig = self::readWebmanConfigFile();
 
         return new self(
             appDir: $appDir,
-            host: $config['host'] ?? $fileConfig['host'] ?? '127.0.0.1',
-            port: $config['port'] ?? $fileConfig['port'] ?? self::FALLBACK_PORT,
             phpBinary: $config['phpBinary'] ?? $fileConfig['phpBinary'] ?? PHP_BINARY,
             entryFile: $config['entryFile'] ?? $fileConfig['entryFile'] ?? 'start.php',
             serverEnv: $config['serverEnv'] ?? $fileConfig['serverEnv'] ?? [],
@@ -85,34 +80,36 @@ final class TestingConfig
     }
 
     /**
-     * 读取被测应用的配置文件（config/testing.php，被测应用侧可用 webman 的 config('testing') 读取同一文件）：
-     * 测试进程已加载 webman 框架（config() 可用）时优先用 config()（完整 webman 语义），
-     * 否则直接 require 配置文件（测试进程通常未加载 webman 框架，配置需自包含）
+     * 确保被测应用的 webman 配置数据已加载（幂等，已加载时跳过）
+     *
+     * 测试进程加载被测应用 vendor/autoload.php 时，webman-framework 的 composer.json
+     * autoload.files 已注册 helpers.php（config() 函数可用），但配置数据存储在
+     * Webman\Config 静态类中，需 Config::load 填充——未引导 webman 的测试进程里
+     * config() 返回空数组。这里在读取前主动加载应用配置目录（与 webman 进程内读取
+     * 同一份数据，含 process 等全部配置）；exclude 与框架 bootstrap 一致（route 除外）。
      */
-    private static function readWebmanConfigFile(string $appDir): array
+    public static function ensureConfigLoaded(string $appDir): void
     {
-        if (function_exists('config')) {
-            $config = config('testing');
-            if (is_array($config)) {
-                return $config;
-            }
+        if (config() === []) {
+            \Webman\Config::load(rtrim($appDir, '/') . '/config', ['route']);
         }
+    }
 
-        $file = rtrim($appDir, '/') . '/config/testing.php';
-        if (!is_file($file)) {
+    /**
+     * 读取被测应用的配置文件（config/testing.php，被测应用侧可用 webman 的 config('testing')
+     * 读取同一文件）：测试进程加载被测应用 vendor/autoload.php 时，webman-framework 的
+     * composer.json autoload.files 已注册 helpers.php，config() 函数恒可用（配置数据由
+     * ensureConfigLoaded 确保已加载）——直接走 webman 的 config()，与 webman 进程内
+     * 读取同一份配置数据
+     */
+    private static function readWebmanConfigFile(): array
+    {
+        $config = config('testing');
+        if ($config === null) {
             return [];
         }
-        try {
-            $config = require $file;
-        } catch (\Throwable $e) {
-            throw new InvalidArgumentException(sprintf(
-                '读取 testing 配置文件失败: %s（配置文件在测试进程内直接执行，请避免 base_path() 等 webman 专属函数，可用 getcwd() 代替）: %s',
-                $file,
-                $e->getMessage(),
-            ), 0, $e);
-        }
         if (!is_array($config)) {
-            throw new InvalidArgumentException("testing 配置文件需返回数组: {$file}");
+            throw new InvalidArgumentException("testing 配置（config('testing')）需为数组");
         }
 
         return $config;

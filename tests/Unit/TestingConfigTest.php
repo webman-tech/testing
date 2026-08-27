@@ -6,13 +6,17 @@ use WebmanTech\Testing\Config\TestingConfig;
  * TestingConfig 的构造、校验与配置传导（显式传参 > webman 配置文件 > 默认值）。
  */
 
+beforeEach(function () {
+    // 模拟 config() 的数据源：真实应用中由 webman-framework 的 helpers.php 提供（见 tests/Pest.php）
+    $GLOBALS['webman_mock_app_dir'] = fixture_get_path('webman-app');
+    $GLOBALS['webman_mock_config_override'] = null;
+});
+
 test('fromConfig 默认值与入口文件校验', function () {
     $appDir = fixture_get_path('webman-app');
     $config = TestingConfig::fromConfig(['appDir' => $appDir]);
 
     expect($config->appDir)->toBe($appDir)
-        ->and($config->host)->toBe('127.0.0.1')
-        ->and($config->port)->toBe(18787) // FALLBACK_PORT
         ->and($config->phpBinary)->toBe(PHP_BINARY)
         ->and($config->entryFile)->toBe('start.php')
         ->and($config->serverEnv)->toBe([])
@@ -33,11 +37,10 @@ test('fromConfig 默认值与入口文件校验', function () {
 
 test('webman 配置文件（config/testing.php）自动读取', function () {
     $appDir = fixture_get_path('webman-config-app');
+    $GLOBALS['webman_mock_app_dir'] = $appDir;
     $config = TestingConfig::fromConfig(['appDir' => $appDir]);
 
-    expect($config->host)->toBe('0.0.0.0')
-        ->and($config->port)->toBe(16666)
-        ->and($config->stdoutReady)->toBe('Server ready')
+    expect($config->stdoutReady)->toBe('Server ready')
         ->and($config->serverEnv)->toBe(['APP_ENV' => 'testing'])
         ->and($config->stopTimeout)->toBe(5.0)
         ->and($config->processTimeout)->toBe(120)
@@ -46,21 +49,21 @@ test('webman 配置文件（config/testing.php）自动读取', function () {
 
 test('配置源优先级：显式传参 > webman 配置文件 > 默认值', function () {
     $appDir = fixture_get_path('webman-config-app');
+    $GLOBALS['webman_mock_app_dir'] = $appDir;
+
     // 显式传参 > 配置文件
-    expect(TestingConfig::fromConfig(['appDir' => $appDir, 'host' => '127.0.0.1'])->host)->toBe('127.0.0.1')
-        ->and(TestingConfig::fromConfig(['appDir' => $appDir, 'port' => 18080])->port)->toBe(18080)
+    expect(TestingConfig::fromConfig(['appDir' => $appDir, 'stdoutReady' => 'explicit'])->stdoutReady)->toBe('explicit')
         // 配置文件 > 默认值
-        ->and(TestingConfig::fromConfig(['appDir' => $appDir])->host)->toBe('0.0.0.0')
-        // 无配置文件时用默认值
-        ->and(TestingConfig::fromConfig(['appDir' => fixture_get_path('webman-app')])->host)->toBe('127.0.0.1')
-        ->and(TestingConfig::fromConfig(['appDir' => fixture_get_path('webman-app')])->port)->toBe(18787);
+        ->and(TestingConfig::fromConfig(['appDir' => $appDir])->stdoutReady)->toBe('Server ready');
+
+    // 无配置文件时用默认值（模拟应用已加载配置但未提供 testing 配置）
+    $GLOBALS['webman_mock_config_override'] = ['app' => ['debug' => true]];
+    expect(TestingConfig::fromConfig(['appDir' => fixture_get_path('webman-app')])->stdoutReady)->toBe('Start success');
 });
 
 test('fromConfig 覆盖各项配置', function () {
     $config = TestingConfig::fromConfig([
         'appDir' => fixture_get_path('webman-app'),
-        'host' => '0.0.0.0',
-        'port' => 18666,
         'entryFile' => 'start.php',
         'serverEnv' => ['APP_ENV' => 'testing', 'FOO' => 'bar'],
         'stdoutReady' => 'Server ready',
@@ -70,9 +73,7 @@ test('fromConfig 覆盖各项配置', function () {
         'command' => 'my-webman',
     ]);
 
-    expect($config->host)->toBe('0.0.0.0')
-        ->and($config->port)->toBe(18666)
-        ->and($config->serverEnv)->toBe(['APP_ENV' => 'testing', 'FOO' => 'bar'])
+    expect($config->serverEnv)->toBe(['APP_ENV' => 'testing', 'FOO' => 'bar'])
         ->and($config->stdoutReady)->toBe('Server ready')
         ->and($config->startTimeout)->toBe(5.0)
         ->and($config->processTimeout)->toBe(120)

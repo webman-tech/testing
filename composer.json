@@ -35,7 +35,15 @@
         "phpstan": "phpstan",
         "test": "pest",
         "test:coverage": "pest --coverage",
-        "test:coverage:html": "pest --coverage --coverage-html=build/coverage"
+        "test:coverage:html": "pest --coverage --coverage-html=build/coverage",
+        "e2e": [
+            "@e2e:install",
+            "@e2e:test"
+        ],
+        "e2e:install": "php e2e/setup.php webman",
+        "e2e:sync": "php e2e/setup.php webman --sync",
+        "e2e:test": "cd e2e/webman && vendor/bin/pest",
+        "e2e:vcs": "php e2e/setup.php webman --vcs"
     },
     "suggest": {
         "guzzlehttp/guzzle": "PSR-18 HTTP 客户端实现（安装后自动发现并使用；未安装时组件会提示）",

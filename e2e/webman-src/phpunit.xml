@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+
+    <!-- 测试端口统一驱动：测试进程 putenv → server 子进程继承 → config/process.php 读取；
+         业务运行时不设置，process.php 回退业务端口（默认 8787） -->
+    <php>
+        <env name="APP_PORT" value="18787"/>
+    </php>
+</phpunit>

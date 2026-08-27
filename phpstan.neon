@@ -4,6 +4,9 @@ parameters:
     paths:
         - src
     tmpDir: runtime/phpstan
+    bootstrapFiles:
+        - tests/phpstan/bootstrap.php # 被测应用（webman 项目）才有的函数（config），分析前真实加载注册符号
+        - tests/phpstan/WebmanConfig.php # 被测应用（webman 项目）才有的类（Webman\Config），分析前真实加载注册符号
     ignoreErrors:
         -
             identifier: missingType.iterableValue # Property XXXX type has no value type specified in iterable type array.

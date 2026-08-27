@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WebmanTech\Testing;
 
+use InvalidArgumentException;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -18,10 +19,11 @@ use WebmanTech\Testing\Http\TestResponse;
 /**
  * 真实 webman 进程编排
  *
- * 整个测试进程共享一个 server 实例（端口取 TestingConfig::port，未配置时用 TestingConfig
- * 私有 FALLBACK_PORT（18787）；端口由被测应用侧共享的 config/testing.php 决定，
- * 应用在 config/process.php 以 config('testing.port') 读取同一来源），由 shutdown function
- * 保证停止，避免各测试文件反复启停。
+ * 整个测试进程共享一个 server 实例（host/port 不经组件配置：以与 webman 相同的方式
+ * 读取 config('process.webman.listen')——helpers 由被测应用 composer autoload.files
+ * 自动加载，配置数据读取前经 TestingConfig::ensureConfigLoaded 确保已加载，应用侧
+ * 如何切换端口（如环境变量 APP_PORT 驱动）组件无需关注，天然与应用进程一致），
+ * 由 shutdown function 保证停止，避免各测试文件反复启停。
  */
 final class Server
 {
@@ -34,7 +36,15 @@ final class Server
 
     private ?Process $process = null;
 
-    private ?int $port = null;
+    /**
+     * 监听地址（从应用 config/process.php 读取，惰性解析缓存）
+     */
+    private ?string $baseUrl = null;
+
+    /**
+     * 是否已引导被测应用 webman 环境（幂等：重复引导会重复注册路由）
+     */
+    private bool $bootstrapped = false;
 
     private ?ClientInterface $httpClient = null;
 
@@ -51,7 +61,10 @@ final class Server
     public static function instance(?TestingConfig $config = null): self
     {
         if (self::$instance === null) {
-            self::$instance = new self($config ?? TestingConfig::fromConfig([]));
+            $config ??= TestingConfig::fromConfig([]);
+            // 后续 config() 读取（listen 等）依赖 webman 配置数据已加载，先确保
+            TestingConfig::ensureConfigLoaded($config->appDir);
+            self::$instance = new self($config);
             // 无论测试进程如何退出，都尝试停掉 server 进程
             register_shutdown_function(fn() => self::$instance?->stop());
         }
@@ -77,14 +90,85 @@ final class Server
         return rtrim($this->config->appDir, '/') . '/runtime' . ($sub !== null ? '/' . ltrim($sub, '/') : '');
     }
 
-    public function port(): int
-    {
-        return $this->port ??= $this->config->port;
-    }
-
     public function baseUrl(): string
     {
-        return 'http://' . $this->config->host . ':' . $this->port();
+        if ($this->baseUrl === null) {
+            [$scheme, $host, $port] = self::resolveListen($this->readListen());
+            $this->baseUrl = $scheme . '://' . $host . ':' . $port;
+        }
+
+        return $this->baseUrl;
+    }
+
+    /**
+     * 解析 webman 进程的 listen 配置为 [scheme, host, port]
+     *
+     * 0.0.0.0/:: 表示监听任意地址，客户端请求应使用本机回环地址 127.0.0.1。
+     *
+     * @return array{0:string, 1:string, 2:int}
+     */
+    public static function resolveListen(string $listen): array
+    {
+        $parts = parse_url($listen);
+        if ($parts === false || !isset($parts['host'])) {
+            throw new InvalidArgumentException("无法解析 listen 地址: {$listen}");
+        }
+        $host = in_array($parts['host'], ['0.0.0.0', '::', '[::]'], true) ? '127.0.0.1' : $parts['host'];
+
+        return [$parts['scheme'] ?? 'http', $host, (int)($parts['port'] ?? 80)];
+    }
+
+    /**
+     * 引导被测应用 webman 环境（与 webman worker 进程内一致的组件初始化）
+     *
+     * 非 HTTP 测试（tests/Unit 直接使用 webman 组件）场景：测试进程默认只加载了读取监听地址
+     * 所需的最小配置，容器/中间件/路由/bootstrap 类均未初始化，组件行为可能与 webman 进程内
+     * 不一致。本方法以与 webman 相同的方式引导：require 被测应用 support/bootstrap.php
+     * （webman worker 的 onWorkerStart 加载的同一文件，$worker 传 null——测试进程无 Worker
+     * 实例，Bootstrap 接口本就允许），其内部完整加载配置（含 process）、执行 config/bootstrap.php
+     * 与插件 bootstrap 类、注册中间件与路由。
+     *
+     * 幂等：仅首次调用生效（重复引导会重复注册路由）。
+     */
+    public function bootstrapWebman(): void
+    {
+        if ($this->bootstrapped) {
+            return;
+        }
+        // 与 webman 相同的方式：worker_start() 也是 require 应用侧 support/bootstrap.php
+        // （骨架文件通常为一行转发，应用可自定义扩展）
+        $file = rtrim($this->config->appDir, '/') . '/support/bootstrap.php';
+        if (!is_file($file)) {
+            throw new RuntimeException("引导 webman 环境需要被测应用提供 support/bootstrap.php（未找到 {$file}）");
+        }
+        try {
+            require_once $file;
+        } finally {
+            // webman bootstrap 会 set_error_handler（错误转异常）压入栈顶，测试框架（PHPUnit/Pest）
+            // 会检测 error handler 栈变化并标记 risky，引导后弹出恢复
+            restore_error_handler();
+        }
+        $this->bootstrapped = true;
+    }
+
+    /**
+     * 读取被测应用 config/process.php 中 webman 进程的 listen 配置（与 webman 相同的读取方式）
+     *
+     * 测试进程加载被测应用 vendor/autoload.php 时，webman-framework 的 composer.json
+     * autoload.files 已注册 helpers.php，config() 函数恒可用；配置数据（Webman\Config
+     * 静态类）在 Server::instance 时经 ensureConfigLoaded 确保已加载——直接走 webman
+     * 的 config()，与 webman 进程内读取同一份配置数据（应用侧如何切换端口组件无需关注）
+     */
+    private function readListen(): string
+    {
+        $listen = config('process.webman.listen');
+        if (!is_string($listen) || $listen === '') {
+            throw new InvalidArgumentException(
+                "未检测到 webman 进程的 listen 配置：config('process.webman.listen') 需为监听地址字符串（被测应用在 config/process.php 中配置）"
+            );
+        }
+
+        return $listen;
     }
 
     /**

@@ -32,6 +32,17 @@ trait InteractsWithServer
     }
 
     /**
+     * 引导被测应用 webman 环境（见 Server::bootstrapWebman()）
+     *
+     * 非 HTTP 测试（tests/Unit 直接使用 webman 组件）场景：在测试闭包/setUp 中调用，
+     * 使测试进程内配置/容器/路由/中间件与 webman 进程内一致（幂等）。
+     */
+    public function webmanBootstrap(): void
+    {
+        $this->webmanServer()->bootstrapWebman();
+    }
+
+    /**
      * 通用副作用轮询：$probe 返回真值即返回该值，超时抛 WebmanTestingTimeoutException
      *
      * 典型场景：等待定时任务副作用文件增长、等待日志落盘。

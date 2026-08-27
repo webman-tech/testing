@@ -9,6 +9,12 @@ use WebmanTech\Testing\Config\TestingConfig;
  * TestCase 基类方法的行为契约（HTTP/命令的真实发送路径由 e2e 覆盖）
  */
 
+beforeEach(function () {
+    // 模拟 config() 的数据源：真实应用中由 webman-framework 的 helpers.php 提供（见 tests/Pest.php）
+    $GLOBALS['webman_mock_app_dir'] = fixture_get_path('webman-app');
+    $GLOBALS['webman_mock_config_override'] = null;
+});
+
 test('webmanServer 进程级单例：首次配置生效，后续忽略', function () {
     $case = new TestCase('capture');
     $config = TestingConfig::fromConfig(['appDir' => fixture_get_path('webman-app')]);
@@ -16,7 +22,7 @@ test('webmanServer 进程级单例：首次配置生效，后续忽略', functio
 
     expect($server)->toBeInstanceOf(Server::class)
         ->and($case->webmanServer())->toBe($server) // 后续调用返回同一实例
-        ->and($case->webmanServer(TestingConfig::fromConfig(['appDir' => $config->appDir, 'port' => 12345]))->config()->port)->toBe(18787); // 配置被忽略，保持首次默认
+        ->and($case->webmanServer(TestingConfig::fromConfig(['appDir' => $config->appDir, 'serverEnv' => ['FOO' => 'bar']]))->config()->serverEnv)->toBe([]); // 配置被忽略，保持首次默认
 });
 
 test('webmanRuntimePath 拼接 runtime 目录', function () {
