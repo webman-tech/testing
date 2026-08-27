@@ -1,0 +1,23 @@
+# https://phpstan.org/config-reference
+parameters:
+    level: 9
+    paths:
+        - src
+    tmpDir: runtime/phpstan
+    ignoreErrors:
+        -
+            identifier: missingType.iterableValue # Property XXXX type has no value type specified in iterable type array.
+        -
+            identifier: cast.int # Cannot cast mixed to int.
+        -
+            identifier: cast.string # Cannot cast mixed to string.
+        -
+            identifier: missingType.generics # Property XXX with generic class WeakMap does not specify its types: TKey, TValue
+        - '#Method (.*) should return (.*) but returns mixed\.#'
+        - '#Parameter (.*) of method (.*) expects (.*), mixed given\.#'
+        - '#Parameter (.*) of static method (.*) expects (.*), mixed given\.#'
+        - '#Parameter (.*) of class (.*) constructor expects (.*), mixed given\.#'
+        - '#Property (.*) does not accept mixed\.#'
+        - '#Cannot access offset (.*) on mixed\.#'
+        - '#Possibly invalid array key type mixed\.#'
+    reportUnmatchedIgnoredErrors: false # 关闭 ignore 掉的错误的提示
