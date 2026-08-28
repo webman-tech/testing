@@ -89,3 +89,4 @@ vendor/bin/pest    # 或 vendor/bin/phpunit
 ## AI 辅助
 
 - **开发维护**：[AGENTS.md](AGENTS.md) — 面向 AI 的代码结构和开发规范说明
+- **使用最佳实践**：[skills/webman-tech-testing-best-practices](skills/webman-tech-testing-best-practices/SKILL.md) — 面向 AI 辅助用户正确使用组件（推荐写法、常见坑）

@@ -45,6 +45,8 @@ composer e2e:vcs       # testing 组件经 GitHub VCS dev-main 安装（验证�
     - `InteractsWithServer.php`：webmanServer/webmanRuntimePath/webmanWaitFor/webmanBootstrap（laravel 无对应物：webman 为常驻进程，需真实进程编排）
   - `Exceptions/`：WebmanTestingTimeoutException
 - `README.md`：用户向文档（安装、用法、API 概览、常见场景）
+- `skills/`：AI 技能（随包分发，辅助用户正确使用组件）
+  - `webman-tech-testing-best-practices`：testing 使用的最佳实践（有立场的推荐写法、常见坑）
 - `e2e/`：真实 webman 环境验证（见「测试方式」e2e 段）：`setup.php`（create-project 最新骨架 → patch composer.json → update → sync webman-src）；`webman-src/`（提交的自有代码：config 覆盖/app 演示/tests，见 e2e/README.md）
 
 ## 关键实现约束
