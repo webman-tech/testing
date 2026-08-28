@@ -1,0 +1,7 @@
+# 非必要导出：发布包只保留 src/ + 文档 + skills（随包分发，供 AI 辅助使用）
+# 开发相关（CI/测试/静态分析）与 e2e 应用对用户无意义，忽略导出
+/.github export-ignore
+/e2e export-ignore
+/tests export-ignore
+/phpunit.xml export-ignore
+/phpstan.neon export-ignore
