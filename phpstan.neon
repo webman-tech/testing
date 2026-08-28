@@ -3,6 +3,8 @@ parameters:
     level: 9
     paths:
         - src
+    excludePaths:
+        - src/E2eSetup/stubs # 脚手架模板（webman/laravel 样例代码，框架类在被 测应用里才存在，不参与组件静态分析）
     tmpDir: runtime/phpstan
     bootstrapFiles:
         - tests/phpstan/bootstrap.php # 被测应用（webman 项目）才有的函数（config），分析前真实加载注册符号

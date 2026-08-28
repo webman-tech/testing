@@ -15,7 +15,7 @@ webman 的真实进程测试组件（laravel 式体验、webman 式实现）：�
 ```bash
 composer test      # 运行组件自身单测（pest）
 composer phpstan   # PHPStan level 9 静态分析
-composer e2e:install   # 重建 e2e 应用（create-project 最新 webman 骨架 + patch + update + sync webman-src）
+composer e2e:install   # 重建 e2e 应用（php bin/e2e-setup install，由 e2e/e2e-setup.php 定义驱动；依赖场景用户侧为 vendor/bin/e2e-setup）
 composer e2e:sync      # 仅同步 e2e 自有代码（dev 快速迭代）
 composer e2e:test      # 运行 e2e 测试（cd e2e/webman && vendor/bin/pest）
 composer e2e           # 完整 e2e（install + test）
@@ -29,6 +29,10 @@ composer e2e:vcs       # testing 组件经 GitHub VCS dev-main 安装（验证�
 - `src/`（按功能模块划分子目录，根目录仅保留核心入口；命名空间与目录一一对应，如 `Http/TestResponse.php` → `WebmanTech\Testing\Http\TestResponse`）：
   - `Server.php`：进程编排核心（单例、启停、就绪等待、残留进程清理、PSR-18 发送、webman 环境引导 bootstrapWebman）
   - `TestCase.php`：测试基类，组合 5 个 Concerns（对齐 laravel `Illuminate\Foundation\Testing\TestCase` 组合模式）；phpunit 直接继承；pest 经 `pest()->extend(TestCase::class)->in(...)` 绑定（laravel 骨架同款机制）；全部能力收敛为基类方法，无全局函数；继承 `PHPUnit\Framework\TestCase as BaseTestCase`
+  - `E2eSetup/`：框架无关的 e2e 应用安装编排子域（e2e-setup 工具，**不 import 组件其他域、仅依赖 php + symfony/process + symfony/console，按可独立拆出设计**，webman 内容仅以样例出现）。**子域文档自含，见 `src/E2eSetup/AGENTS.md`（开发说明）与 `src/E2eSetup/README.md`（用户文档），根目录只做引导**：
+    - `Console.php` + `SetupConfig.php`：根目录仅保留这两个入口（命令装配 / 定义文件类写法）
+    - `Command/`、`Installer/`、`Definition/`、`stubs/`：实现细节归二级目录
+  - `bin/`：`e2e-setup`（composer bin 声明，vendor/bin/e2e-setup）
   - `Config/`：配置域
     - `TestingConfig.php`：配置（数组构造 + webman 配置文件，只做配置传导）
   - `Http/`：HTTP 域（请求发送 + 响应断言）
@@ -47,7 +51,8 @@ composer e2e:vcs       # testing 组件经 GitHub VCS dev-main 安装（验证�
 - `README.md`：用户向文档（安装、用法、API 概览、常见场景）
 - `skills/`：AI 技能（随包分发，辅助用户正确使用组件）
   - `webman-tech-testing-best-practices`：testing 使用的最佳实践（有立场的推荐写法、常见坑）
-- `e2e/`：真实 webman 环境验证（见「测试方式」e2e 段）：`setup.php`（create-project 最新骨架 → patch composer.json → update → sync webman-src）；`webman-src/`（提交的自有代码：config 覆盖/app 演示/tests，见 e2e/README.md）
+  - `webman-tech-e2e-setup`：e2e-setup 工具的使用最佳实践（与 testing 分开维护，用法见 src/E2eSetup/README.md 引导）
+- `e2e/`：真实 webman 环境验证（见「测试方式」e2e 段）：`e2e-setup.php`（应用定义，`php bin/e2e-setup install` 驱动：create-project 最新骨架 → patch → update → reinstall → sync）；`webman-src/`（提交的自有代码：config 覆盖/app 演示/tests，见 e2e/README.md）
 
 ## 关键实现约束
 
@@ -77,7 +82,7 @@ composer e2e:vcs       # testing 组件经 GitHub VCS dev-main 安装（验证�
 ## 测试方式
 
 - **组件自身单测**（`tests/Unit/`）：TestResponse 直接构造 PSR-7 Response 验证断言语义；CommandResult 起真实 php 小进程；TestingConfig 验证构造/校验/配置传导（显式 > config/testing.php > 默认值，fixture：`tests/Fixtures/webman-app/`（start.php + config/process.php——listen 读取的 fixture）、`webman-config-app/`（含 config/testing.php 配置文件））；单测环境无 webman 框架，`tests/Pest.php` 按 webman Config 语义模拟 `config()`（经 `$GLOBALS['webman_mock_app_dir']`/`$GLOBALS['webman_mock_config_override']` 控制数据源，各 fromConfig/Server 测试文件 beforeEach 设置）；TestCase 验证单例契约/runtime 拼接/轮询行为；ServerTest 验证 resolveListen 解析（0.0.0.0 映射/默认端口/非法地址）、baseUrl 从模拟 config() 读取、listen 缺失可读异常、bootstrapWebman 缺文件可读异常；MakesHttpRequests 经 stub `webmanSend` 验证请求组装（headers 合并、JSON 选项、cookie 拼接）；RequestFactory/HttpClientFactory 验证 options→PSR-7 解析与自动发现（guzzle 已装场景）；InteractsWithDatabase 用 sqlite :memory:（进程内）验证断言语义与防注入
-- **e2e 测试**（真实 HTTP/CLI/进程路径的覆盖）：本仓库 `e2e/` 自建真实 webman 骨架应用（`php e2e/setup.php webman`：composer create-project 最新版 workerman/webman → patch composer.json → composer update → sync `e2e/webman-src` 覆盖）。e2e 应用即组件的最大使用方——Server 进程编排、`$this->` 请求方法（pest extend 绑定）、基类全部方法、TestResponse 断言都在真实 webman 链路下运行（重定向跟随/不跟随双路径、303 POST 转 GET、config/testing.php 的 httpClient 参数生效、监听地址链路——e2e process.php 含 Log::channel/app_path 等 webman 专属写法，验证组件经 config() 读取 listen（phpunit.xml 注入 APP_PORT=18787 后两端同址、业务模式保持 8787）、WebmanBootstrapTest 验证 bootstrapWebman 引导后 config/support\Log/路由/时区与 worker 进程内一致且无 risky）；数据库断言走文件型 sqlite（runtime/e2e.sqlite）：应用侧经 webman/database（support\Db）操作，连接由 config/database.php env 化控制（phpunit.xml 注入 DB_CONNECTION=sqlite，业务默认 mysql，与 APP_PORT 同一模式）；测试进程 PDO 直连 server 同源文件库跨进程验证（:memory: 无法跨进程）；guzzle 由 setup.php 的 require_dev 显式声明（组件不强制依赖，验证自动发现链路）；crontab 进程演示副作用轮询等待。testing 组件默认经 path repository 引用当前仓库代码（本地/CI 直接验证当前 checkout，symlink 即时生效），`--vcs` 切换为 GitHub VCS dev-main（验证发布链路，需先推送 main）。**组件行为改动后必须跑 e2e**：`php e2e/setup.php webman` + `cd e2e/webman && vendor/bin/pest`（CI 已含 e2e job）
+- **e2e 测试**（真实 HTTP/CLI/进程路径的覆盖）：本仓库 `e2e/` 自建真实 webman 骨架应用（`php bin/e2e-setup install`：composer create-project 最新版 workerman/webman → patch composer.json → composer update → reinstall → sync `e2e/webman-src` 覆盖；安装编排即组件 `src/E2eSetup/` 能力的自举验证，定义见 `e2e/e2e-setup.php`）。e2e 应用即组件的最大使用方——Server 进程编排、`$this->` 请求方法（pest extend 绑定）、基类全部方法、TestResponse 断言都在真实 webman 链路下运行（重定向跟随/不跟随双路径、303 POST 转 GET、config/testing.php 的 httpClient 参数生效、监听地址链路——e2e process.php 含 Log::channel/app_path 等 webman 专属写法，验证组件经 config() 读取 listen（phpunit.xml 注入 APP_PORT=18787 后两端同址、业务模式保持 8787）、WebmanBootstrapTest 验证 bootstrapWebman 引导后 config/support\Log/路由/时区与 worker 进程内一致且无 risky）；数据库断言走文件型 sqlite（runtime/e2e.sqlite）：应用侧经 webman/database（support\Db）操作，连接由 config/database.php env 化控制（phpunit.xml 注入 DB_CONNECTION=sqlite，业务默认 mysql，与 APP_PORT 同一模式）；测试进程 PDO 直连 server 同源文件库跨进程验证（:memory: 无法跨进程）；guzzle 由 e2e/e2e-setup.php 的 require_dev 显式声明（组件不强制依赖，验证自动发现链路）；crontab 进程演示副作用轮询等待。testing 组件默认经 path repository 引用当前仓库代码（本地/CI 直接验证当前 checkout，symlink 即时生效），`--vcs` 切换为 GitHub VCS dev-main（验证发布链路，需先推送 main）。**组件行为改动后必须跑 e2e**：`composer e2e:install` + `composer e2e:test`（CI 已含 e2e job）
 
 ## 注意事项
 
@@ -85,3 +90,4 @@ composer e2e:vcs       # testing 组件经 GitHub VCS dev-main 安装（验证�
 2. 端口约定：组件不配置 host/port——监听地址直接读应用 `config/process.php` 的 webman 进程 listen（与 webman 同一读取方式：测试进程经 config('process.webman.listen')，配置数据由 ensureConfigLoaded 自动加载，天然一致）。业务端口由应用侧 process.php 自行决定（默认 8787，勿改为测试端口）；「测试用独立端口」为应用侧处理模式：process.php env 化（`getenv('APP_PORT') ?: <业务端口>`）+ phpunit.xml `<php><env name="APP_PORT" value="18787"/>` 注入（测试进程环境 → server 子进程继承 → process.php 读取；组件经 config() 读到同一 listen），e2e 已按此模式配置并验证闭环。**`APP_PORT` 为 e2e 自定义的示例变量名（非 webman 官方约定）**，开发者可自定义命名；数据库连接等其它测试环境切换同理（config/database.php env 化 + phpunit.xml 注入，建议见 skill 的数据库断言章节）
 3. 能力全部收敛为类方法，不新增全局函数（用户明确要求：不要使用函数做功能）
 4. phpstan level 9：`posix_kill`/`is_file` 的重复调用会被误判纯函数恒真，用带注释的 `@phpstan-ignore-next-line` 说明时序语义
+5. E2eSetup 域框架无关约束：`src/E2eSetup/` 不 import 组件其他域（Server/TestCase 等）、不引入 webman 依赖（仅 php + symfony/process + symfony/console），预留独立迁移——新增代码时保持此边界；命令定义用 symfony/console 标准组件（勿手写参数解析/usage）；子域文档自含（src/E2eSetup/AGENTS.md + README.md），根文档只做引导

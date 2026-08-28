@@ -1,0 +1,13 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use WebmanTech\Testing\E2eSetup\Console;
+
+// composer 代理（vendor/bin/e2e-setup）已加载项目 autoload（_composer_autoload_path）；
+// 直接运行本文件时加载本包 vendor/autoload.php
+$autoload = $GLOBALS['_composer_autoload_path'] ?? __DIR__ . '/../vendor/autoload.php';
+require $autoload;
+
+exit(Console::run($argv));

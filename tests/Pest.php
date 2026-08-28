@@ -19,6 +19,66 @@ if (!function_exists('fixture_get_path')) {
     }
 }
 
+if (!function_exists('e2e_tmp_dir')) {
+    /**
+     * 创建并登记 e2e 编排器单测的临时目录（afterEach 自动清理）
+     */
+    function e2e_tmp_dir(string $name = 'tmp'): string
+    {
+        // runtime/ 已被 .gitignore 忽略（与 phpstan 的 runtime/phpstan 同源）
+        // realpath 规范化路径（去除 tests/.. 等未规范化段），与 Console 侧 dirname(realpath($configFile)) 保持一致
+        $base = realpath(__DIR__ . '/../runtime') ?: __DIR__ . '/../runtime';
+        $dir = $base . '/e2e-tmp/' . $name . '-' . uniqid();
+        mkdir($dir, 0755, true);
+        $GLOBALS['e2e_tmp_dirs'][] = $dir;
+
+        return $dir;
+    }
+}
+
+if (!function_exists('e2e_installer_skeleton')) {
+    /**
+     * 预建/重建 target 骨架（模拟 composer create-project 产物）
+     *
+     * install 流程测试的 runner stub 不执行真实 create-project，但目录删除是 PHP 原生
+     * 实现（真实执行），需在命令序列中模拟 create-project 副作用，保证后续 patch 有文件可读。
+     */
+    function e2e_installer_skeleton(string $baseDir): void
+    {
+        mkdir($baseDir . '/target', 0755, true);
+        file_put_contents($baseDir . '/target/composer.json', json_encode([
+            'name' => 'skeleton/app',
+            'require' => ['php' => '^8.2', 'monolog/monolog' => '^2.0'],
+            'config' => ['allow-plugins' => ['other/plugin' => true]],
+        ], JSON_PRETTY_PRINT));
+    }
+}
+
+// 注意：不能直接用全局函数 afterEach()——Pest 3 中全局函数 hooks 按「调用文件路径」精确匹配
+// 测试文件（AfterEachRepository::get），tests/Pest.php 自身不是测试文件，注册的 hook 永不执行；
+// 必须经 uses()->afterEach()->in(__DIR__) 把 hook 传播到 tests 目录下的所有测试类。
+uses()->afterEach(function () {
+    // 清理 e2e_tmp_dir() 创建的临时目录（其他测试未登记，不受影响）
+    foreach ($GLOBALS['e2e_tmp_dirs'] ?? [] as $dir) {
+        if (!is_dir($dir)) {
+            continue;
+        }
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            if ($item->isDir()) {
+                rmdir((string)$item);
+            } else {
+                unlink((string)$item);
+            }
+        }
+        rmdir($dir);
+    }
+    $GLOBALS['e2e_tmp_dirs'] = [];
+})->in(__DIR__);
+
 if (!function_exists('config')) {
     /**
      * 模拟被测应用（webman 项目）的 config() 函数

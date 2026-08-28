@@ -13,7 +13,7 @@
 
 ```
 e2e/
-├── setup.php                 # 安装命令（create-project → patch → update → sync）
+├── e2e-setup.php             # 应用定义（类写法 SetupConfig->app()，php bin/e2e-setup install 读取：skeleton/packages/require/reinstall_packages 等）
 ├── README.md
 └── webman-src/               # 提交：自有代码（config 覆盖/app 演示/tests）
 # 生成物（.gitignore 忽略，可抛弃）：e2e/webman
@@ -24,11 +24,11 @@ e2e/
 ```bash
 # 完整安装（删除重建，create-project 最新版 webman 骨架）
 composer e2e:install
-# 等价：php e2e/setup.php webman
+# 等价：php bin/e2e-setup install（读取 e2e/e2e-setup.php 定义；Composer 不为根包生成 vendor/bin 代理，依赖场景用户侧为 vendor/bin/e2e-setup）
 
 # 仅同步自有代码（dev 快速迭代：改了 webman-src 后执行）
 composer e2e:sync
-# 等价：php e2e/setup.php webman --sync
+# 等价：php bin/e2e-setup sync
 
 # 运行测试
 composer e2e:test
@@ -39,12 +39,14 @@ composer e2e
 
 # testing 组件经 GitHub VCS dev-main 安装（验证真实发布链路，需先推送 main）
 composer e2e:vcs
-# 等价：php e2e/setup.php webman --vcs
+# 等价：php bin/e2e-setup install --vcs
 ```
 
 默认（不带 `--vcs`）testing 组件经 **path repository 引用当前仓库代码**（symlink），本地/CI 直接验证当前 checkout，改动即时生效。
 
 ## 安装流程（顺序关键）
+
+以下流程由 `php bin/e2e-setup install` 自动执行（安装编排为本仓库 `src/E2eSetup/` 组件能力的自举验证，定义见 `e2e/e2e-setup.php`）：
 
 1. `composer create-project workerman/webman`（最新版骨架）
 2. patch composer.json：testing 组件 repository（path 指向本仓库 / `--vcs` 切 GitHub VCS dev-main）+ 测试依赖（pest / webman/console / guzzle / webman/database / workerman/crontab）

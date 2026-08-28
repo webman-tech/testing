@@ -157,6 +157,10 @@ return [
 - 4xx/5xx 由断言层处理（http_errors 恒 false），请求不需要 try/catch
 - 自定义客户端必须保证 4xx/5xx 不抛异常，否则断言层拿不到错误响应
 
+## 插件包 e2e 搭建（e2e-setup）
+
+为插件包搭建真实 e2e 环境（`vendor/bin/e2e-setup`：init/install/sync）的完整用法已拆分为独立 skill：**[webman-tech-e2e-setup](../webman-tech-e2e-setup/SKILL.md)**（应用定义类写法、常见坑），此处不再赘述。
+
 ## 常见错误
 
 | 错误 | 原因 | 解决 |
