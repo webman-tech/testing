@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        php: [ 8.2, 8.3, 8.4 ]
+        php: [ 8.2, 8.3, 8.4, 8.5 ]
 
     name: PHP ${{ matrix.php }}
 
@@ -51,8 +51,11 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: [ 8.2, 8.3, 8.4, 8.5 ]
 
-    name: E2E (webman latest)
+    name: E2E (PHP ${{ matrix.php }})
 
     steps:
       - name: Checkout
@@ -61,7 +64,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.3
+          php-version: ${{ matrix.php }}
           tools: composer:v2
           extensions: pcntl,posix,pdo_sqlite
 
@@ -73,8 +76,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: e2e-composer-${{ hashFiles('e2e/setup.php') }}
-          restore-keys: e2e-composer-
+          key: e2e-php${{ matrix.php }}-composer-${{ hashFiles('e2e/setup.php') }}
+          restore-keys: e2e-php${{ matrix.php }}-composer-
 
       - name: Setup e2e webman app (create-project latest skeleton)
         run: composer e2e:install
