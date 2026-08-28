@@ -49,6 +49,8 @@ HTTP 请求仅依赖 PSR 标准接口（psr/http-client + psr/http-message），
 
 链路：phpunit.xml 设置 → 测试进程环境 → server 子进程（继承环境）→ process.php 读取；组件与 webman 进程内读取同一份配置（config('process.webman.listen')），两端读到同一地址。不 env 化也可以：组件读到的就是业务端口，测试直接使用该端口。
 
+> `APP_PORT` 为**示例变量名**：webman 官方骨架并没有预置该 env，需应用自行定义（可自定义命名，如 `TEST_PORT`）。其他测试环境切换（如数据库连接）同理：应用侧 `config/database.php` 的连接/文件路径 env 化，测试时由 `phpunit.xml` 注入调整（完整建议见 [skills/webman-tech-testing-best-practices](skills/webman-tech-testing-best-practices/SKILL.md) 的数据库断言章节）。
+
 ### 2. 写测试（pest 风格）
 
 在 `tests/Pest.php` 中绑定基类（laravel 骨架同款机制）：

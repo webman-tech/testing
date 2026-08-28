@@ -9,7 +9,7 @@ description: webman 真实进程测试。触发：写 HTTP 接口测试、认证
 
 1. **真实进程，HTTP 断言**：测试即「起真实 webman 进程 + 发 HTTP 请求」，完整覆盖路由/中间件/异常管线/自定义进程；不做进程内模拟请求
 2. **共享一个 server**：整个测试进程只启一个 server——`$this->get()` 自动启动、进程结束自动停止；不手动启停、不并发跑同一应用的测试
-3. **不配置 host/port**：组件与应用同源读取 `config('process.webman.listen')`；测试端口由 `phpunit.xml` 注入 `APP_PORT`、应用 process.php env 化读取（业务保持 8787）
+3. **环境切换靠应用侧 env 化配置**：组件不配置 host/port，测试/业务环境切换（端口、数据库连接等）由应用侧 env 化配置 + `phpunit.xml` 注入驱动，env 变量名由应用自行定义——详见「测试环境切换」章节
 4. **跨进程限制**：无法 actingAs/mock/swap（需同进程）；替代物是 `withToken` + 应用侧 reset 端点
 
 ## 写 HTTP 接口测试
@@ -83,8 +83,10 @@ $this->assertDatabaseHas('users', ['name' => 'demo']);
 $this->assertSoftDeleted('users', ['id' => 1]);
 ```
 
+**数据库配置同样建议 env 化**（与端口同一模式，见「测试环境切换」章节）：应用侧 `config/database.php` 的连接/文件路径读应用自定义 env，测试时由 `phpunit.xml` 注入切换到 sqlite 文件库，测试进程 DSN 与 server 侧 `runtime_path()` 同源定位同一文件。
+
 - **sqlite 必须文件库**：`:memory:` 只存在于 server 进程内，测试进程连不上
-- DSN 用 `webmanRuntimePath()` 拼接，保证两进程指向同一文件
+- DSN 用 `webmanRuntimePath()` 拼接，保证两进程指向同一文件（与 server 侧 `runtime_path()` 同源）
 - 表名/列名白名单校验 + bindValue 绑定，传参无需转义
 
 ## CLI 命令测试
@@ -98,6 +100,45 @@ $this->webmanCommand('e2e:fail')->assertFailed()->assertExitCode(1);
 ```
 
 `webmanCommand` 不启动 HTTP server，只执行 `php <command> <args>`。
+
+## 测试环境切换（应用侧 env 化）
+
+测试/业务环境切换统一走「**应用侧配置读自定义 env + `phpunit.xml` 注入**」模式：
+
+- **env 变量名由应用自行定义**——webman 官方骨架没有预置任何测试 env（`APP_PORT`、`DB_CONNECTION` 均为示例命名，可按需改为 `TEST_PORT`、`TEST_DB` 等）
+- **链路**：phpunit.xml 设置 → 测试进程环境 → server 子进程继承 → 应用配置读取（组件与 webman 进程读同一份配置，不关心切换方式）
+- **业务零影响**：业务运行时不设置 env，配置回退业务值（端口 8787、数据库 mysql 等）
+
+**端口**（组件不配置 host/port，与应用同源读 `config('process.webman.listen')`）：
+
+```php
+// config/process.php
+'listen' => 'http://0.0.0.0:' . (getenv('APP_PORT') ?: 8787),
+```
+
+```xml
+<!-- phpunit.xml -->
+<env name="APP_PORT" value="18787"/>
+```
+
+**数据库**（连接切到测试库，如 sqlite 文件库）：
+
+```php
+// config/database.php
+return [
+    'default' => getenv('DB_CONNECTION') ?: 'mysql',
+    'connections' => [
+        'mysql' => [/* 业务连接 */],
+        // 测试用文件库：与 webmanRuntimePath() 同源定位（runtime 下）
+        'sqlite' => ['driver' => 'sqlite', 'database' => runtime_path() . '/e2e.sqlite'],
+    ],
+];
+```
+
+```xml
+<!-- phpunit.xml -->
+<env name="DB_CONNECTION" value="sqlite"/>
+```
 
 ## 测试环境配置
 

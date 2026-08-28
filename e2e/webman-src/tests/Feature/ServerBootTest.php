@@ -38,6 +38,12 @@ test('监听地址由应用 config/process.php 驱动（组件与 webman 同一�
     $this->get('/env/app-port')->assertOk()->assertJson(['port' => '18787']);
 });
 
+test('数据库连接由应用 config/database.php 的 env 驱动（测试注入 DB_CONNECTION 切 sqlite，业务默认 mysql 不受影响）', function () {
+    // 与端口同一模式：phpunit.xml 注入 DB_CONNECTION=sqlite → 应用进程 config('database.default')
+    // 读到 sqlite（业务运行时不设置则回退 mysql）；测试进程 PDO 直连同源文件库（见 DatabaseTest）
+    $this->get('/env/db-connection')->assertOk()->assertJson(['connection' => 'sqlite']);
+});
+
 test('应用侧 config/testing.php 的 httpClient 参数生效', function () {
     // 组件自动读取被测应用的 config/testing.php（与 webman 侧 config('testing') 同源）；
     // 自动发现的 guzzle 客户端按配置构造（默认 timeout=10/connect_timeout=2，此处配置为 5/1）

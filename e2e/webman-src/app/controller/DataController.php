@@ -2,32 +2,32 @@
 
 namespace app\controller;
 
-use PDO;
+use support\Db;
 use support\Request;
 use support\Response;
 
 /**
- * sqlite 数据演示：应用进程写库，测试进程 PDO 直连同一文件库断言（跨进程验证）
+ * 数据库演示：经 webman/database（support\Db）操作 sqlite 文件库，测试进程 PDO 直连同一文件断言（跨进程验证）
  *
- * 注意 :memory: 仅存在于 server 进程内，测试进程连不上，e2e 用文件库 runtime/e2e.sqlite，
- * 测试进程经 webmanRuntimePath('e2e.sqlite') 定位同源文件。
+ * 连接由 config/database.php 经 env 控制（测试时 phpunit.xml 注入 DB_CONNECTION=sqlite 切文件库，
+ * 与 process.php 的 APP_PORT 同一模式）；:memory: 仅存在于 server 进程内测试进程连不上，必须文件库。
  */
 class DataController
 {
-    private const DB_FILE = '/runtime/e2e.sqlite';
+    private static bool $tableEnsured = false;
 
-    private static function pdo(): PDO
+    private static function ensureTable(): void
     {
-        $pdo = new PDO('sqlite:' . base_path() . self::DB_FILE);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $pdo->exec('CREATE TABLE IF NOT EXISTS users (
+        if (self::$tableEnsured) {
+            return;
+        }
+        Db::statement('CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT NOT NULL,
             name TEXT NOT NULL,
             deleted_at TEXT NULL
         )');
-
-        return $pdo;
+        self::$tableEnsured = true;
     }
 
     public function create(Request $request): Response
@@ -38,34 +38,40 @@ class DataController
             return json(['error' => 'email/name required'])->withStatus(422);
         }
 
-        $pdo = self::pdo();
-        $stmt = $pdo->prepare('INSERT INTO users (email, name) VALUES (?, ?)');
-        $stmt->execute([$email, $name]);
+        self::ensureTable();
+        $id = Db::table('users')->insertGetId([
+            'email' => $email,
+            'name' => $name,
+        ]);
 
-        return json(['id' => (int)$pdo->lastInsertId()])->withStatus(201);
+        return json(['id' => $id])->withStatus(201);
     }
 
     public function index(Request $request): Response
     {
-        $rows = self::pdo()->query('SELECT id, email, name FROM users WHERE deleted_at IS NULL ORDER BY id')
-            ->fetchAll(PDO::FETCH_ASSOC);
+        self::ensureTable();
+        $rows = Db::table('users')->whereNull('deleted_at')->orderBy('id')->get();
 
         return json(['users' => $rows, 'count' => count($rows)]);
     }
 
     public function softDelete(Request $request, int $id): Response
     {
-        $stmt = self::pdo()->prepare('UPDATE users SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL');
-        $stmt->execute([date('Y-m-d H:i:s'), $id]);
+        self::ensureTable();
+        $affected = Db::table('users')
+            ->whereNull('deleted_at')
+            ->where('id', $id)
+            ->update(['deleted_at' => date('Y-m-d H:i:s')]);
 
-        return $stmt->rowCount() > 0
+        return $affected > 0
             ? json(['deleted' => true])
             : json(['error' => 'not found'])->withStatus(404);
     }
 
     public function reset(): Response
     {
-        self::pdo()->exec('DELETE FROM users');
+        self::ensureTable();
+        Db::table('users')->delete();
 
         return json(['reset' => true]);
     }

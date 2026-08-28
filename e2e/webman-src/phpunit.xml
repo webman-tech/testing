@@ -13,9 +13,10 @@
         </testsuite>
     </testsuites>
 
-    <!-- 测试端口统一驱动：测试进程 putenv → server 子进程继承 → config/process.php 读取；
-         业务运行时不设置，process.php 回退业务端口（默认 8787） -->
+    <!-- 测试环境统一由 env 驱动（变量名由应用自定）：测试进程 putenv → server 子进程继承 → 应用配置读取；
+         业务运行时不设置，配置回退业务值（端口默认 8787、数据库默认 mysql） -->
     <php>
         <env name="APP_PORT" value="18787"/>
+        <env name="DB_CONNECTION" value="sqlite"/>
     </php>
 </phpunit>

@@ -11,6 +11,10 @@ Route::get('/health', fn() => json(['status' => 'ok']));
 // （业务端口默认 8787 不受影响，仅测试时经环境变量切换为测试端口）
 Route::get('/env/app-port', fn() => json(['port' => (string)getenv('APP_PORT')]));
 
+// 数据库链路验证：应用进程侧读取 config/database.php 的 default（phpunit.xml 注入
+// DB_CONNECTION=sqlite 时切换到 sqlite 文件库，业务默认 mysql 不受影响）
+Route::get('/env/db-connection', fn() => json(['connection' => config('database.default')]));
+
 // 重定向跟随/不跟随双路径（followingRedirects 断言最终响应；默认断言 302 + Location）
 Route::get('/redirect', fn() => redirect('/health'));
 // 303 语义：POST 跟随重定向时转为 GET（组件手动实现 guzzle 语义的覆盖点）

@@ -14,7 +14,7 @@
  *   1. composer create-project 官方骨架（workerman/webman 最新版）
  *   2. patch composer.json（testing 组件 repository + 测试依赖）
  *   3. composer update（安装依赖）
- *   4. composer reinstall webman/console（触发 Install 落地 webman CLI 入口）
+ *   4. composer reinstall webman/console webman/database（触发 Install 落地 webman CLI 入口与 config/database.php 模板）
  *   5. copy webman-src 自有代码到应用目录（覆盖式，保证自有 config 覆盖在骨架默认配置之后生效）
  */
 
@@ -37,6 +37,8 @@ function app_definition(): array
         'require' => [
             // crontab 副作用演示（webman-src/app/process/Crontab.php）
             'workerman/crontab' => '^1.0',
+            // 数据库（webman-src/config/database.php 经 env 覆盖切换 sqlite，与端口 APP_PORT 同一模式）
+            'webman/database' => '^2.1',
         ],
         'require_dev' => [
             'pestphp/pest' => '^3.8',
@@ -96,8 +98,8 @@ function install_app(array $def, bool $useVcs): void
     // 批量 composer update 时 composer 进程内 autoloader 未就绪，包内 Install.php 不触发；
     // 单包 reinstall 会刷新 autoloader，走 post-package-install -> support\Plugin::install 真实安装链，
     // 落地 `webman` CLI 入口与 config/plugin/webman/console（webmanCommand() 依赖）
-    echo "==> [4/5] composer reinstall webman/console（触发 Install 落地 webman CLI 入口）\n";
-    run_cmd(['composer', 'reinstall', '--no-interaction', '--no-progress', 'webman/console'], $target, [
+    echo "==> [4/5] composer reinstall webman/console webman/database（触发 Install 落地 webman CLI 入口与 database 配置模板）\n";
+    run_cmd(['composer', 'reinstall', '--no-interaction', '--no-progress', 'webman/console', 'webman/database'], $target, [
         'COMPOSER_ROOT_VERSION' => 'dev-main',
     ]);
 
