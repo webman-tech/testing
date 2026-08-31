@@ -34,7 +34,7 @@ cd e2e/webman && vendor/bin/pest
 
 ## 详细用法
 
-命令参数（`--vcs` / `--config` / 多应用）、应用定义类写法（SetupConfig/AppConfig 方法表）、典型流程（webman 插件包 / laravel 包 / 发布链路验证）与常见坑见 **[skills/webman-tech-testing-best-practices/e2e-setup.md](../../skills/webman-tech-testing-best-practices/references/e2e-setup.md)**（最佳实践 skill 的 reference，仅插件/扩展包场景按需查阅）；该子域的开发维护说明（设计约束/目录结构/测试方式）见 [AGENTS.md](AGENTS.md)。
+命令参数（`--vcs` / `--config` / 多应用）、应用定义类写法（SetupConfig/AppConfig 方法表）、典型流程（webman 插件包 / laravel 包 / 发布链路验证）与常见坑见 **[skills/webman-tech-testing-best-practices/references/e2e-setup.md](../../skills/webman-tech-testing-best-practices/references/e2e-setup.md)**（最佳实践 skill 的 reference，仅插件/扩展包场景按需查阅）；该子域的开发维护说明（设计约束/目录结构/测试方式）见 [AGENTS.md](AGENTS.md)。
 
 ## 与本仓库的关系
 

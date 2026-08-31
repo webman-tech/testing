@@ -37,7 +37,7 @@ vendor/bin/pest    # 或 vendor/bin/phpunit
 
 ## 为插件包搭建 e2e 测试（e2e-setup）
 
-本包内置**框架无关的 e2e 安装编排工具**（`vendor/bin/e2e-setup`）：为 webman/laravel 插件包一键搭建「真实骨架 + 真实进程」的集成测试环境（create-project → patch composer.json → composer update → reinstall → sync 自有代码）。命令、应用定义类写法（SetupConfig/AppConfig）、典型流程与常见坑见 **[skills/webman-tech-e2e-setup](skills/webman-tech-e2e-setup/SKILL.md)**；子域文档（定位/快速开始/自举关系）见 `src/E2eSetup/README.md`。
+本包内置**框架无关的 e2e 安装编排工具**（`vendor/bin/e2e-setup`）：为 webman/laravel 插件包一键搭建「真实骨架 + 真实进程」的集成测试环境（create-project → patch composer.json → composer update → reinstall → sync 自有代码）。命令、应用定义类写法（SetupConfig/AppConfig）、典型流程与常见坑见 **[skills/webman-tech-testing-best-practices/references/e2e-setup.md](skills/webman-tech-testing-best-practices/references/e2e-setup.md)**；子域文档（定位/快速开始/自举关系）见 `src/E2eSetup/README.md`。
 
 ## 文档导航
 
