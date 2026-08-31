@@ -1,6 +1,6 @@
 ---
 name: webman-tech-testing-best-practices
-description: webman 真实进程测试。触发：写 HTTP 接口测试、认证与状态隔离、等待异步副作用（crontab/日志）、数据库直连断言、CLI 命令测试、测试环境配置。
+description: webman 真实进程测试。触发：写 HTTP 接口测试、认证与状态隔离、等待异步副作用（crontab/日志）、数据库直连断言、CLI 命令测试、测试环境配置与切换（env 化端口/数据库）、为插件包搭建骨架 e2e 环境（e2e-setup init/install/sync、应用定义编辑）。
 ---
 
 # webman-tech/testing 最佳实践
@@ -90,10 +90,7 @@ $this->assertSoftDeleted('users', ['id' => 1]);
 
 ### 为什么默认不用事务回滚（rollback）
 
-laravel 测试与**应用同进程**，测试内开启事务、结束后 `rollBack()` 即可还原所有数据；真实进程模式**测试进程与 server 进程是两个进程**：
-
-- server 进程内的写入（HTTP 接口、CLI 命令触发的业务代码）发生在**它自己的连接**上，不在测试进程的事务里——测试结束回滚不掉
-- 因此跨进程 Feature 测试只能用「**清空业务表**」（truncate）隔离：每测试前 `DELETE` 配置表（sqlite 顺带重置 `sqlite_sequence` 自增）
+laravel 测试与应用**同进程**，事务可回滚一切；真实进程模式测试进程与 server 进程**跨进程**，server 侧写入（HTTP/CLI 触发的业务代码）发生在它自己的连接上，测试进程回滚不掉——跨进程 Feature 测试只能用「**清空业务表**」（truncate）隔离：每测试前 `DELETE` 配置表（sqlite 顺带重置 `sqlite_sequence` 自增）。
 
 ### 三种隔离模式（setUpDatabase 第二参数 $isolation）
 
@@ -128,7 +125,7 @@ $this->setUpDatabase(['sqlite' => 'testing.sqlite'], 'memory');
 ],
 ```
 
-**数据库配置同样建议 env 化**（与端口同一模式，见「测试环境切换」章节）：应用侧 `config/database.php` 的连接/文件路径读应用自定义 env，测试时由 `phpunit.xml` 注入切换到 sqlite 文件库，测试进程 DSN 与 server 侧 `runtime_path()` 同源定位同一文件。
+**数据库配置同样建议 env 化**（端口/数据库的 env 切换写法见「测试环境切换」章节）：测试库 DSN 与 server 侧 `runtime_path()` 同源定位同一文件。
 
 - **Feature 测试 sqlite 必须文件库**：`:memory:` 只存在于 server 进程内，测试进程连不上（`memory` 隔离模式只用于不走 server 进程的 unit 测试）
 - **phinx 0.16 sqlite 坑**：adapter 会给 name 追加 `.sqlite3` 后缀，应用 `phinx.php` 应传 `connection`（PDO）保证迁移库与 `config/database.php` 连接的是同一文件
@@ -186,16 +183,16 @@ return [
 <env name="DB_CONNECTION" value="sqlite"/>
 ```
 
-**应用 get_env() 只读 `$_SERVER` 时**（如 webman-tech/common-utils 的 EnvAttr）：phpunit `<env>` 只写 `putenv` + `$_ENV`，不会进 `$_SERVER`。`<env>` 注入发生在 bootstrap 加载**之前**（Application::run 先 PhpHandler 后 loadBootstrapScript），在应用侧 `tests/bootstrap.php` 顶部回灌一份即可，**无需 `<server>` 双写**：
+**应用 get_env() 只读 `$_SERVER` 时**（如 common-utils 的 EnvAttr）：phpunit `<env>` 只写 `putenv` + `$_ENV`，不进 `$_SERVER`；在应用侧 `tests/bootstrap.php` 顶部（加载 vendor/autoload 前）回灌一份即可，**无需 `<server>` 双写**（`<env>` 注入发生在 bootstrap 加载之前）：
 
 ```php
-// tests/bootstrap.php（在加载应用 vendor/autoload 与 support/bootstrap.php 之前）
+// tests/bootstrap.php（加载应用 vendor/autoload 之前）
 foreach ($_ENV as $name => $value) {
     $_SERVER[$name] = $value;
 }
 ```
 
-server 子进程（php start.php start）经 putenv 继承同一份 env，测试进程与 server 进程读到一致的测试配置。
+server 子进程经 putenv 继承同一份 env，测试进程与 server 进程读到一致的测试配置。
 
 ## 测试环境配置
 
@@ -214,10 +211,6 @@ return [
 - 4xx/5xx 由断言层处理（http_errors 恒 false），请求不需要 try/catch
 - 自定义客户端必须保证 4xx/5xx 不抛异常，否则断言层拿不到错误响应
 
-## 插件包 e2e 搭建（e2e-setup）
-
-为插件包搭建真实 e2e 环境（`vendor/bin/e2e-setup`：init/install/sync）的完整用法已拆分为独立 skill：**[webman-tech-e2e-setup](../webman-tech-e2e-setup/SKILL.md)**（应用定义类写法、常见坑），此处不再赘述。
-
 ## 常见错误
 
 | 错误 | 原因 | 解决 |
@@ -228,3 +221,7 @@ return [
 | 等不到 crontab 副作用 | 跨分钟边界 | 等待超时至少 `60 - date('s') + 10` |
 | 请求 4xx/5xx 抛异常 | 自定义客户端未关 http_errors | 自定义 PSR-18 客户端保证 4xx/5xx 不抛异常 |
 | 配置改了不生效 | 修改了错误的配置文件 | 组件配置只读应用侧 `config/testing.php`，显式传参优先级最高 |
+
+## Reference
+
+- **插件包 e2e 搭建（e2e-setup）**：[e2e-setup.md](references/e2e-setup.md) — 仅当被测对象是「要分发给其他项目的插件/扩展包」时读取（init/install/sync 命令、应用定义、典型流程、常见坑）；完整 webman 应用项目不需要

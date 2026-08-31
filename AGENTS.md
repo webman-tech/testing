@@ -55,8 +55,7 @@ composer e2e:vcs       # testing 组件经 GitHub VCS dev-main 安装（验证�
   - `Exceptions/`：WebmanTestingTimeoutException
 - `README.md`：用户向文档（安装、用法、API 概览、常见场景）
 - `skills/`：AI 技能（随包分发，辅助用户正确使用组件）
-  - `webman-tech-testing-best-practices`：testing 使用的最佳实践（有立场的推荐写法、常见坑）
-  - `webman-tech-e2e-setup`：e2e-setup 工具的使用最佳实践（与 testing 分开维护，用法见 src/E2eSetup/README.md 引导）
+  - `webman-tech-testing-best-practices`：testing 使用的最佳实践（有立场的推荐写法、常见坑；e2e-setup 用法在其 references 文件 `e2e-setup.md`，仅面向插件/扩展包场景）
 - `e2e/`：真实 webman 环境验证（见「测试方式」e2e 段）：`e2e-setup.php`（应用定义，`php bin/e2e-setup install` 驱动：create-project 最新骨架 → patch → update → reinstall → sync）；`webman-src/`（提交的自有代码：config 覆盖/app 演示/tests，见 e2e/README.md）
 
 ## 关键实现约束

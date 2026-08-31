@@ -1,11 +1,8 @@
----
-name: webman-tech-e2e-setup
-description: e2e-setup 工具（vendor/bin/e2e-setup）。触发：为 webman/laravel 插件包搭建 e2e 测试环境、init 生成脚手架、编辑应用定义文件（SetupConfig/AppConfig）、install/sync 安装与同步、webman 插件 reinstallPackages 配置、laravel 包 ServiceProvider 注册、--vcs GitHub 发布链路验证、e2e 应用无法运行排查。
----
+# 插件包 e2e 搭建（e2e-setup）
 
-# e2e-setup：真实骨架 e2e 环境搭建
+> Reference：本文件是 [webman-tech-testing-best-practices](../SKILL.md) 的按需查阅材料，仅在「被测对象是要分发给其他项目的插件/扩展包」时读取。大多数项目是完整的 webman 应用，直接在项目内写测试即可，**不需要** e2e-setup。
 
-为被测包搭建「真实骨架 + 真实进程」的集成测试环境（create-project → patch composer.json → update → reinstall → sync 自有代码），无需复制安装脚本。框架无关（webman/laravel 通用），随 webman-tech/testing 组件分发（`src/E2eSetup/`），仅依赖 php + symfony/process + symfony/console。
+e2e-setup 是随 testing 组件分发的框架无关安装编排工具（`vendor/bin/e2e-setup`，实现见 `src/E2eSetup/`）：为被测包搭建「真实骨架 + 真实进程」的集成测试环境（create-project 最新骨架 → 注入被测包 → 安装依赖 → 同步自有代码），无需复制安装脚本。
 
 ## 命令速查
 
@@ -38,8 +35,6 @@ return SetupConfig::configure()
     );
 ```
 
-### 方法表
-
 | 方法 | 说明 |
 |----|------|
 | `skeleton(包名, ?版本)` | 骨架包名（`workerman/webman`、`laravel/laravel`）或本地骨架目录路径（存在则复制代替 create-project）；第二参钉版本（laravel 场景推荐 `^12.0` 钉主版本） |
@@ -51,7 +46,7 @@ return SetupConfig::configure()
 
 ## 典型流程
 
-### webman 插件包（默认）
+**webman 插件包（默认）**
 
 1. `init` 生成脚手架（默认 webman 样例）
 2. 编辑 `e2e/e2e-setup.php`：
@@ -59,24 +54,20 @@ return SetupConfig::configure()
    - `requireDev` 至少补 pest + guzzle
    - `reinstallPackages` 至少 `['webman/console']`（webman 插件需要 CLI 入口与 `config/plugin/<package>/` 模板的再加 `webman/database` 等）
 3. `install` 完整安装
-4. 在 `e2e/app-src/tests/` 写测试（继承 testing 组件 TestCase 即可用全部断言；写测试细节见 **webman-tech-testing-best-practices** skill）
+4. 在 `e2e/app-src/tests/` 写测试（继承 testing 组件 TestCase 即可用最佳实践 skill 的全部写法）
 5. dev 迭代：改 `app-src/` 后只需 `sync`，不必重装
 
-### laravel 包
+**laravel 包**
 
 1. `init --framework=laravel`（app-src 骨架同款）
 2. 定义补 `skeleton('laravel/laravel', '^12.0')` 钉主版本；被测包 ServiceProvider 注册在 laravel 11+ 的 `bootstrap/providers.php`（写在 app-src 里随 sync 落地）
 3. `install`；测试执行用骨架自带 PHPUnit（Pest 风格需补 `pestphp/pest-plugin-laravel`）
 
-### 发布链路验证（--vcs）
+**发布链路验证（--vcs）**
 
 1. 推送被测包 `main`
 2. `install --vcs`（path repository 切 GitHub VCS dev-main，验证「发布后安装」真实链路）
 3. 回归本地开发：不带 `--vcs` 重装（path symlink，改动即时生效）
-
-## 测试写法引导
-
-e2e 应用内的测试就是 testing 组件的完整能力：pest 绑定 `WebmanTech\Testing\TestCase` 后 `$this->get()` 自动起真实 webman 进程，端口/数据库等环境切换走应用侧 env 化配置。**细节（认证、等待副作用、数据库断言、常见坑）见 [webman-tech-testing-best-practices](../webman-tech-testing-best-practices/SKILL.md)**。
 
 ## 常见坑
 

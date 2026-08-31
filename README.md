@@ -42,5 +42,5 @@ vendor/bin/pest    # 或 vendor/bin/phpunit
 ## 文档导航
 
 - **使用最佳实践**：[skills/webman-tech-testing-best-practices](skills/webman-tech-testing-best-practices/SKILL.md) — 写 HTTP 测试、认证与状态隔离、等待异步副作用、数据库断言、CLI 命令测试、测试环境切换的推荐写法与常见坑
-- **e2e 搭建**：[skills/webman-tech-e2e-setup](skills/webman-tech-e2e-setup/SKILL.md) — e2e-setup 工具的命令、应用定义方法表、典型流程与常见坑（与 testing 分开维护）
+- **e2e 搭建**：[skills/webman-tech-testing-best-practices/references/e2e-setup.md](skills/webman-tech-testing-best-practices/references/e2e-setup.md) — 最佳实践 skill 的 reference：插件/扩展包的骨架 e2e 环境搭建（命令、应用定义方法表、典型流程与常见坑；大多数完整 webman 项目无需使用）
 - **开发维护**：[AGENTS.md](AGENTS.md) — 面向 AI 的代码结构与开发规范（设计边界、时序陷阱、测试方式）
