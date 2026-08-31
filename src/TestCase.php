@@ -26,4 +26,16 @@ class TestCase extends BaseTestCase
     use Concerns\InteractsWithConsole;
     use Concerns\InteractsWithDatabase;
     use Concerns\InteractsWithServer;
+
+    /**
+     * 自动清理数据库隔离副作用：回滚 transaction 开启的事务、恢复 memory 切换的
+     * 被测应用 Db 连接（应用侧 TestCase 覆写 tearDown 时记得 parent::tearDown() 以保持链式）
+     */
+    protected function tearDown(): void
+    {
+        $this->rollBackDatabase();
+        $this->restoreDatabaseConnection();
+
+        parent::tearDown();
+    }
 }

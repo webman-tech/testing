@@ -38,6 +38,7 @@ final class TestingConfig
         public readonly float  $stopTimeout,
         public readonly string $command,
         array   $httpClient,
+        public readonly array $database = [],
     ) {
         $entryFile = rtrim($appDir, '/') . '/' . $entryFile;
         if (!is_file($entryFile)) {
@@ -76,6 +77,7 @@ final class TestingConfig
             stopTimeout: $config['stopTimeout'] ?? $fileConfig['stopTimeout'] ?? 10.0,
             command: $config['command'] ?? $fileConfig['command'] ?? 'webman',
             httpClient: $config['httpClient'] ?? $fileConfig['httpClient'] ?? [],
+            database: $config['database'] ?? $fileConfig['database'] ?? [],
         );
     }
 

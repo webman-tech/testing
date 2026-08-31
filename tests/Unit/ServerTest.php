@@ -11,9 +11,8 @@ use WebmanTech\Testing\Server;
  */
 
 beforeEach(function () {
-    // 模拟 config() 的数据源：真实应用中由 webman-framework 的 helpers.php 提供（见 tests/Pest.php）
-    $GLOBALS['webman_mock_app_dir'] = fixture_get_path('webman-app');
-    $GLOBALS['webman_mock_config_override'] = null;
+    // mock 配置经 webman_mock_use_app 灌入真实 Webman\Config（见 tests/Pest.php）
+    webman_mock_use_app('webman-app');
 });
 
 test('resolveListen 解析 listen 为 [scheme, host, port]，任意地址监听映射为本机回环', function () {
@@ -34,7 +33,7 @@ test('resolveListen 无法解析时抛异常', function () {
 test('listen 配置缺失时抛可读异常', function () {
     // 模拟应用已加载配置但未配置 process.webman.listen
     // （baseUrl 未成功时无缓存，需先于正常读取的测试执行）
-    $GLOBALS['webman_mock_config_override'] = ['app' => ['debug' => true]];
+    webman_mock_use_app('webman-app', ['app' => ['debug' => true]]);
     $server = Server::instance(TestingConfig::fromConfig(['appDir' => fixture_get_path('webman-app')]));
 
     expect(fn() => $server->baseUrl())

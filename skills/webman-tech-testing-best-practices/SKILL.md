@@ -75,18 +75,64 @@ $count = $this->webmanWaitFor(function () {
 
 ## 数据库断言
 
-测试进程**直连数据库**断言（PDO），与 server 进程共享同一数据源：
+测试进程**直连数据库**断言（PDO），与 server 进程共享同一数据源；需要迁移/数据隔离时用 `setUpDatabase()`（对应 laravel RefreshDatabase）一步就绪：
 
 ```php
-$this->setDatabaseConnection(new PDO('sqlite:' . $this->webmanRuntimePath('e2e.sqlite')));
+// 应用侧测试基类 setUp() 中一行调用（对应 laravel 的 RefreshDatabase）：
+// 1. 迁移：进程级一次性（默认 phinx，复用应用 phinx.php；可经 testing 配置 database.migrator 覆盖）
+// 2. 连接：自动注入连接（未手动注入时；取被测应用 Db（support\Db）同源连接——组件默认下游已安装 webman/database）
+// 3. 隔离：按 $isolation 模式隔离数据（默认 truncate）
+$this->setUpDatabase(['sqlite' => 'testing.sqlite']); // $expect 可选安全校验（防误连业务库）
+
 $this->assertDatabaseHas('users', ['name' => 'demo']);
 $this->assertSoftDeleted('users', ['id' => 1]);
 ```
 
+### 为什么默认不用事务回滚（rollback）
+
+laravel 测试与**应用同进程**，测试内开启事务、结束后 `rollBack()` 即可还原所有数据；真实进程模式**测试进程与 server 进程是两个进程**：
+
+- server 进程内的写入（HTTP 接口、CLI 命令触发的业务代码）发生在**它自己的连接**上，不在测试进程的事务里——测试结束回滚不掉
+- 因此跨进程 Feature 测试只能用「**清空业务表**」（truncate）隔离：每测试前 `DELETE` 配置表（sqlite 顺带重置 `sqlite_sequence` 自增）
+
+### 三种隔离模式（setUpDatabase 第二参数 $isolation）
+
+| 模式 | 场景 | 行为 |
+|---|---|---|
+| `truncate`（默认） | Feature 测试（走真实 server 进程） | 迁移 + 注入连接 + 每测试清空 `database.truncate` 配置的业务表 |
+| `transaction` | 单进程 unit 测试（不走 server 进程） | 迁移 + 注入连接 + 开启事务，**tearDown 自动回滚**（组件 TestCase 已内置，手动 `rollBackDatabase()` 亦可） |
+| `memory` | 单进程 unit 测试（sqlite） | 每测试全新 `:memory:` 库 + 迁移（每测试重新迁移，绕过进程级一次性标记），天然隔离 |
+
+```php
+// Feature 基类（默认 truncate，跨进程安全）
+$this->setUpDatabase(['sqlite' => 'testing.sqlite']);
+
+// unit 测试基类：仅测试进程写库时，事务回滚/内存库都可用
+$this->setUpDatabase(['sqlite' => 'testing.sqlite'], 'transaction');
+// 或
+$this->setUpDatabase(['sqlite' => 'testing.sqlite'], 'memory');
+```
+
+- `transaction`/`memory` 仅在**单进程数据库访问**（unit 测试）下可靠：断言连接与 Eloquent 经被测应用 `support\Db` **同源**（同一 PDO，组件默认下游已安装 webman/database），回滚/内存库才能覆盖应用写入
+- `memory` 模式经 `support\Db::connection()->setPdo()` 切换 Eloquent 连接（含迁移目标），**每测试全新库**
+- 应用侧 TestCase 覆写 `tearDown()` 时记得 `parent::tearDown()`，否则事务不会自动回滚、`memory` 模式切换的 Db 连接也不会恢复（`restoreDatabaseConnection()` 亦可手动调用）
+
+**testing 配置**（应用侧 `config/testing.php` 的 `database` 段，测试进程与 webman 进程同一文件）：
+
+```php
+'database' => [
+    // 迁移器默认 phinx（复用应用根目录 phinx.php，测试进程 cwd 即应用根）；
+    // 自定义迁移器：'migrator' => fn() => ... / MyMigrator::class / 实例
+    'phinx' => ['configFile' => 'phinx.php', 'environment' => 'development'],
+    'truncate' => ['users'], // truncate 模式每测试数据隔离要清空的业务表
+],
+```
+
 **数据库配置同样建议 env 化**（与端口同一模式，见「测试环境切换」章节）：应用侧 `config/database.php` 的连接/文件路径读应用自定义 env，测试时由 `phpunit.xml` 注入切换到 sqlite 文件库，测试进程 DSN 与 server 侧 `runtime_path()` 同源定位同一文件。
 
-- **sqlite 必须文件库**：`:memory:` 只存在于 server 进程内，测试进程连不上
-- DSN 用 `webmanRuntimePath()` 拼接，保证两进程指向同一文件（与 server 侧 `runtime_path()` 同源）
+- **Feature 测试 sqlite 必须文件库**：`:memory:` 只存在于 server 进程内，测试进程连不上（`memory` 隔离模式只用于不走 server 进程的 unit 测试）
+- **phinx 0.16 sqlite 坑**：adapter 会给 name 追加 `.sqlite3` 后缀，应用 `phinx.php` 应传 `connection`（PDO）保证迁移库与 `config/database.php` 连接的是同一文件
+- 不依赖迁移时也可手动 `setDatabaseConnection(new PDO(...))` 直连断言
 - 表名/列名白名单校验 + bindValue 绑定，传参无需转义
 
 ## CLI 命令测试
@@ -139,6 +185,17 @@ return [
 <!-- phpunit.xml -->
 <env name="DB_CONNECTION" value="sqlite"/>
 ```
+
+**应用 get_env() 只读 `$_SERVER` 时**（如 webman-tech/common-utils 的 EnvAttr）：phpunit `<env>` 只写 `putenv` + `$_ENV`，不会进 `$_SERVER`。`<env>` 注入发生在 bootstrap 加载**之前**（Application::run 先 PhpHandler 后 loadBootstrapScript），在应用侧 `tests/bootstrap.php` 顶部回灌一份即可，**无需 `<server>` 双写**：
+
+```php
+// tests/bootstrap.php（在加载应用 vendor/autoload 与 support/bootstrap.php 之前）
+foreach ($_ENV as $name => $value) {
+    $_SERVER[$name] = $value;
+}
+```
+
+server 子进程（php start.php start）经 putenv 继承同一份 env，测试进程与 server 进程读到一致的测试配置。
 
 ## 测试环境配置
 

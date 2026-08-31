@@ -6,3 +6,6 @@
 /build/
 /runtime/
 /e2e/webman/
+
+# 单测 fixture 运行时生成物
+/tests/Fixtures/*/runtime/

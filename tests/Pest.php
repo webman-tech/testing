@@ -25,7 +25,7 @@ if (!function_exists('e2e_tmp_dir')) {
      */
     function e2e_tmp_dir(string $name = 'tmp'): string
     {
-        // runtime/ 已被 .gitignore 忽略（与 phpstan 的 runtime/phpstan 同源）
+        // runtime/ 已被 .gitignore 忽略
         // realpath 规范化路径（去除 tests/.. 等未规范化段），与 Console 侧 dirname(realpath($configFile)) 保持一致
         $base = realpath(__DIR__ . '/../runtime') ?: __DIR__ . '/../runtime';
         $dir = $base . '/e2e-tmp/' . $name . '-' . uniqid();
@@ -79,48 +79,82 @@ uses()->afterEach(function () {
     $GLOBALS['e2e_tmp_dirs'] = [];
 })->in(__DIR__);
 
-if (!function_exists('config')) {
+if (!function_exists('webman_mock_config_apply')) {
     /**
-     * 模拟被测应用（webman 项目）的 config() 函数
+     * 把 mock 的配置数据灌入真实 Webman\Config（webman 的 config() 读取源）
      *
-     * 真实应用中该函数由 webman-framework 的 helpers.php 提供（composer.json autoload.files
-     * 注册），测试进程加载被测应用 vendor/autoload.php 时自动就绪（见 Server::readListen()）。
-     * 本仓库单测环境无 webman 框架，这里按 webman Config 语义模拟：读取
-     * $GLOBALS['webman_mock_app_dir'] 指向应用的 config/ 目录（文件名 = 一级 key，支持点分
-     * 路径）；$GLOBALS['webman_mock_config_override'] 为数组时直接作为全部配置（异常路径测试用）。
+     * 组件 require-dev 已引入 webman/database（依赖 webman-framework）：单测进程的
+     * config() 恒为 webman 真实实现（helpers.php 经 composer autoload.files 注册，
+     * 先于任何测试代码加载），无法用同名函数替换。这里在 $GLOBALS 的 mock 数据
+     * （webman_mock_app_dir / webman_mock_config_override）设置后，写入 Webman\Config：
+     * 普通场景 clear + load(fixture 的 config/ 目录)；override 场景（整份配置替换，
+     * 可能含闭包等不可序列化值）反射替换 config 数据并清空 configPath（避免 get
+     * 未命中时 read 回退到旧目录文件）。
      */
-    function config(?string $key = null, mixed $default = null): mixed
+    function webman_mock_config_apply(): void
     {
+        \Webman\Config::clear();
         $override = $GLOBALS['webman_mock_config_override'] ?? null;
         if (is_array($override)) {
-            $data = $override;
-        } else {
-            $appDir = $GLOBALS['webman_mock_app_dir'] ?? null;
-            $configDir = is_string($appDir) ? realpath($appDir . '/config') : false;
-            if ($configDir === false) {
-                return $key === null ? [] : $default;
+            $prop = new ReflectionProperty(\Webman\Config::class, 'config');
+            $prop->setValue(null, $override);
+            $pathProp = new ReflectionProperty(\Webman\Config::class, 'configPath');
+            $pathProp->setValue(null, '');
+            return;
+        }
+        $appDir = $GLOBALS['webman_mock_app_dir'] ?? null;
+        $configDir = is_string($appDir) ? realpath($appDir . '/config') : false;
+        if ($configDir !== false) {
+            // 不能用 Webman\Config::load：其 loadFromDir 要求目录含 app.php（插件兼容
+            // 逻辑），fixture 配置目录没有。按 mock 语义 glob 加载后反射写入，
+            // configPath 一并设置（未命中 key 时 read 实时读文件，行为同 webman）
+            $data = [];
+            foreach (glob($configDir . '/*.php') ?: [] as $file) {
+                $data[basename($file, '.php')] = require $file;
             }
-            static $cache = [];
-            $data = $cache[$configDir] ??= (static function () use ($configDir): array {
-                $result = [];
-                foreach (glob($configDir . '/*.php') ?: [] as $file) {
-                    $result[basename($file, '.php')] = require $file;
-                }
+            $prop = new ReflectionProperty(\Webman\Config::class, 'config');
+            $prop->setValue(null, $data);
+            $pathProp = new ReflectionProperty(\Webman\Config::class, 'configPath');
+            $pathProp->setValue(null, $configDir);
+        }
+    }
+}
 
-                return $result;
-            })();
-        }
-        if ($key === null) {
-            return $data;
-        }
-        $value = $data;
-        foreach (explode('.', $key) as $segment) {
-            if (!is_array($value) || !array_key_exists($segment, $value)) {
-                return $default;
-            }
-            $value = $value[$segment];
-        }
+if (!function_exists('webman_mock_use_app')) {
+    /**
+     * 设置 mock 应用的配置源并应用（各测试文件 beforeEach 一行完成）
+     */
+    function webman_mock_use_app(string $fixturePath, ?array $override = null): void
+    {
+        $GLOBALS['webman_mock_app_dir'] = fixture_get_path($fixturePath);
+        $GLOBALS['webman_mock_config_override'] = $override;
+        webman_mock_config_apply();
+    }
+}
 
-        return $value;
+if (!function_exists('database_support_db_reset')) {
+    /**
+     * 重置被测应用 Db 门面（support\Db，webman/database）的全局状态
+     *
+     * 组件 require-dev 已引入真实 webman/database（单测直接走被测应用同款 Db 门面，
+     * 不再用替身类）。webman/database 的 Manager 是全局单例：连接缓存在协程 Context、
+     * 连接池（DatabaseManager::$pools，static）与 Initializer 的 initialized 标记中；
+     * 用例间需重置三者并按当前 mock 配置重新初始化，否则上一个用例 setPdo 的
+     * :memory: 连接会泄漏到其他用例。被测应用的 config() 语义见 tests/bootstrap.php。
+     */
+    function database_support_db_reset(): void
+    {
+        // 触发 onDestroy 归还连接并清 Context 缓存（Webman\Context::destroy 为 public API）
+        \Webman\Context::destroy();
+        // 关闭并清空连接池（pools 为 protected static，反射访问）
+        $pools = new ReflectionProperty(\Webman\Database\DatabaseManager::class, 'pools');
+        foreach ($pools->getValue() ?: [] as $pool) {
+            $pool->closeConnections();
+        }
+        $pools->setValue(null, []);
+        // 重置 Initializer 标记并按当前 mock config 重新初始化 Manager
+        $initialized = new ReflectionProperty(\Webman\Database\Initializer::class, 'initialized');
+        $initialized->setValue(null, false);
+        \Webman\Database\Initializer::init(config('database'));
     }
 }

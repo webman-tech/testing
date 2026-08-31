@@ -10,9 +10,8 @@ use WebmanTech\Testing\Config\TestingConfig;
  */
 
 beforeEach(function () {
-    // 模拟 config() 的数据源：真实应用中由 webman-framework 的 helpers.php 提供（见 tests/Pest.php）
-    $GLOBALS['webman_mock_app_dir'] = fixture_get_path('webman-app');
-    $GLOBALS['webman_mock_config_override'] = null;
+    // mock 配置经 webman_mock_use_app 灌入真实 Webman\Config（见 tests/Pest.php）
+    webman_mock_use_app('webman-app');
 });
 
 test('webmanServer 进程级单例：首次配置生效，后续忽略', function () {

@@ -33,6 +33,8 @@ return SetupConfig::configure()
         ])
         ->requireDev([
             'pestphp/pest' => '^3.8',
+            // 数据库迁移（setUpDatabase 的 PhinxMigrator 需要；随包 suggest）
+            'robmorgan/phinx' => '^0.16',
             // webman CLI 入口（webmanCommand() 依赖 `webman` 可执行文件）
             'webman/console' => '^2.0',
             // 被测组件本身（path repository 已声明，此处置 dev-main 与 versions 匹配）

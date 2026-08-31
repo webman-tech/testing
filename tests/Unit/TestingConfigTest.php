@@ -7,9 +7,8 @@ use WebmanTech\Testing\Config\TestingConfig;
  */
 
 beforeEach(function () {
-    // 模拟 config() 的数据源：真实应用中由 webman-framework 的 helpers.php 提供（见 tests/Pest.php）
-    $GLOBALS['webman_mock_app_dir'] = fixture_get_path('webman-app');
-    $GLOBALS['webman_mock_config_override'] = null;
+    // mock 配置经 webman_mock_use_app 灌入真实 Webman\Config（见 tests/Pest.php）
+    webman_mock_use_app('webman-app');
 });
 
 test('fromConfig 默认值与入口文件校验', function () {
@@ -37,7 +36,7 @@ test('fromConfig 默认值与入口文件校验', function () {
 
 test('webman 配置文件（config/testing.php）自动读取', function () {
     $appDir = fixture_get_path('webman-config-app');
-    $GLOBALS['webman_mock_app_dir'] = $appDir;
+    webman_mock_use_app('webman-config-app');
     $config = TestingConfig::fromConfig(['appDir' => $appDir]);
 
     expect($config->stdoutReady)->toBe('Server ready')
@@ -49,7 +48,7 @@ test('webman 配置文件（config/testing.php）自动读取', function () {
 
 test('配置源优先级：显式传参 > webman 配置文件 > 默认值', function () {
     $appDir = fixture_get_path('webman-config-app');
-    $GLOBALS['webman_mock_app_dir'] = $appDir;
+    webman_mock_use_app('webman-config-app');
 
     // 显式传参 > 配置文件
     expect(TestingConfig::fromConfig(['appDir' => $appDir, 'stdoutReady' => 'explicit'])->stdoutReady)->toBe('explicit')
@@ -57,7 +56,7 @@ test('配置源优先级：显式传参 > webman 配置文件 > 默认值', func
         ->and(TestingConfig::fromConfig(['appDir' => $appDir])->stdoutReady)->toBe('Server ready');
 
     // 无配置文件时用默认值（模拟应用已加载配置但未提供 testing 配置）
-    $GLOBALS['webman_mock_config_override'] = ['app' => ['debug' => true]];
+    webman_mock_use_app('webman-app', ['app' => ['debug' => true]]);
     expect(TestingConfig::fromConfig(['appDir' => fixture_get_path('webman-app')])->stdoutReady)->toBe('Start success');
 });
 
@@ -91,4 +90,27 @@ test('fromConfig 覆盖 httpClient（与默认值合并）', function () {
 
     // 与默认值 array_merge（http_errors 恒 false 由 HttpClientFactory 保证）
     expect($config->httpClient)->toBe(['timeout' => 6, 'connect_timeout' => 2.0]);
+});
+
+test('fromConfig 透传 database 配置段（显式 > 配置文件 > 默认空）', function () {
+    $config = TestingConfig::fromConfig([
+        'appDir' => fixture_get_path('webman-app'),
+        'database' => ['truncate' => ['users']],
+    ]);
+    expect($config->database)->toBe(['truncate' => ['users']]);
+
+    // 配置文件读取
+    webman_mock_use_app('webman-db-app');
+    $fileConfig = TestingConfig::fromConfig(['appDir' => fixture_get_path('webman-db-app')]);
+    expect($fileConfig->database)->toHaveKey('truncate');
+
+    // 显式 > 配置文件
+    expect(TestingConfig::fromConfig([
+        'appDir' => fixture_get_path('webman-db-app'),
+        'database' => ['migrator' => fn() => null],
+    ])->database)->toHaveKey('migrator');
+
+    // 无配置时默认空数组
+    webman_mock_use_app('webman-app');
+    expect(TestingConfig::fromConfig(['appDir' => fixture_get_path('webman-app')])->database)->toBe([]);
 });

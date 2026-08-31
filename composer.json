@@ -33,11 +33,14 @@
     "require-dev": {
         "guzzlehttp/guzzle": "^7.10",
         "pestphp/pest": "^3.8",
-        "phpstan/phpstan": "^2.1"
+        "phpstan/phpstan": "^2.1",
+        "robmorgan/phinx": "^0.16",
+        "webman/database": "^2.1"
     },
     "suggest": {
         "guzzlehttp/guzzle": "PSR-18 HTTP 客户端实现（安装后自动发现并使用；未安装时组件会提示）",
-        "pestphp/pest": "pest 函数式测试风格（组件同时兼容 phpunit）"
+        "pestphp/pest": "pest 函数式测试风格（组件同时兼容 phpunit）",
+        "webman/database": "数据库就绪（setUpDatabase/断言）基于被测应用的 webman/database（support\\Db），组件默认下游已安装"
     },
     "scripts": {
         "phpstan": "phpstan",

@@ -11,4 +11,10 @@ return [
         'timeout' => 5,
         'connect_timeout' => 1,
     ],
+    // 数据库就绪（InteractsWithDatabase::setUpDatabase() 消费）：
+    // 迁移器默认 phinx（复用应用根目录 phinx.php，测试进程 cwd 即应用根），
+    // truncate 为每测试数据隔离要清空的业务表
+    'database' => [
+        'truncate' => ['users'],
+    ],
 ];

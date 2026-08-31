@@ -1,13 +1,10 @@
 <?php
 
-// 跨进程数据库断言：server 进程内经 HTTP/CLI 写库，测试进程 PDO 直连同一 sqlite 文件库断言
-// （:memory: 仅存在于 server 进程内测试进程连不上，e2e 用文件库 runtime/e2e.sqlite，
-// 经 webmanRuntimePath('e2e.sqlite') 与 server 侧 base_path()/runtime 定位同源文件）
+// 跨进程数据库断言：server 进程内经 HTTP/CLI 写库，测试进程 setUpDatabase 后
+// PDO 直连同一 sqlite 文件库断言（:memory: 无法跨进程，e2e 用 runtime/e2e.sqlite）
 
 beforeEach(function () {
-    $this->setDatabaseConnection(new PDO('sqlite:' . $this->webmanRuntimePath('e2e.sqlite')));
-    // 数据重置推荐应用侧 reset 端点模式（跨进程无容器魔法）
-    $this->post('/data/reset')->assertOk();
+    $this->setUpDatabase(['sqlite' => 'e2e.sqlite']);
 });
 
 test('HTTP 写入的数据可被测试进程直连断言', function () {
